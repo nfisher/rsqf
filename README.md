@@ -1,4 +1,4 @@
-# Rank and Seek Quotient Filter
+# Rank and Seek Quotient Filter [![Build Status](https://travis-ci.org/nfisher/rsqf.svg?branch=master)](https://travis-ci.org/nfisher/rsqf)
 
 The specification and analysis of RSQF can be found in the following paper:
 
