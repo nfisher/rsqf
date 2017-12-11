@@ -18,11 +18,13 @@ An RSQF provides:
 ## Overview
 
 This implementation of RSQF has a fixed error rate of 1/512 or ~0.2%. This was
-done so that each block is ensured to be in contiguous memory.
+done so that each block is ensured to be contiguous in memory.
 
-r is therefore fixed at 9. q will vary relative to p as calculated in the glossary below.
+r is therefore fixed at 9 (`r = log2(1/0.001)`). q will vary relative to p
+(e.g. for 1m entries `p = log2(1,000,000/0.002)`).
 
-A filter that accepts 1 million entries will require ~11.67 bits per entry and require 1MB (1,000,000B) of memory.
+A filter that accepts 1 million entries will require ~11.67 bits per entry and
+require approximately 1.46MB (Si) of memory.
  
 ## Glossary
 
