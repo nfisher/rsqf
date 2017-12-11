@@ -2,7 +2,7 @@
 
 The specification and analysis of RSQF can be found in the following paper:
 
- https://www3.cs.stonybrook.edu/~ppandey/files/p775-pandey.pdf
+ [A general purpose counting filter: making every bit count](https://www3.cs.stonybrook.edu/~ppandey/files/p775-pandey.pdf) by Pandey et al., SIGMOD’17
 
 A Rank and Seek Quotient Filter (RSQF) is an Approximate Membership Query data structure. It is similar to the more popular Bloom Filter (BF) however
 where a BF only provides insert, and lookup.
