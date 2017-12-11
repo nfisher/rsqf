@@ -14,8 +14,8 @@ An RSQF provides:
  * lookup
  * resize
  * merge
-
-## Glossary
+ 
+## Glossary
 
 This glossary summarises the variables specified in the [stonybrook paper](https://www3.cs.stonybrook.edu/~ppandey/files/p775-pandey.pdf).
 
