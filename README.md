@@ -1,11 +1,10 @@
 # Rank and Seek Quotient Filter [![Build Status](https://travis-ci.org/nfisher/rsqf.svg?branch=master)](https://travis-ci.org/nfisher/rsqf)
 
-The specification and analysis of RSQF can be found in the following paper:
+[A general purpose counting filter: making every bit count](https://www3.cs.stonybrook.edu/~ppandey/files/p775-pandey.pdf) by Pandey et al., SIGMOD’17
 
- [A general purpose counting filter: making every bit count](https://www3.cs.stonybrook.edu/~ppandey/files/p775-pandey.pdf) by Pandey et al., SIGMOD’17
-
-A Rank and Seek Quotient Filter (RSQF) is an Approximate Membership Query data structure. It is similar to the more popular Bloom Filter (BF) however
-where a BF only provides insert, and lookup.
+A Rank and Seek Quotient Filter (RSQF) is an Approximate Membership Query data
+structure. It is similar to the popular Bloom Filter (BF) however where a BF
+only provides insert, and lookup.
 
 An RSQF provides:
 
@@ -55,7 +54,8 @@ the nearest integer when calculated from floating point values.
 
 <dt>p - (integer)</dt>
 <dd>Number of bits required from the hashed input to achieve the target error
-for the given number of insertions (n). The p-bit hash is split into high bits (quotient) and low bits (remainder).</dd>
+for the given number of insertions (n). The p-bit hash is split into high bits
+(quotient) and low bits (remainder).</dd>
 <code>p = log2(n/δ)</code>
 
 <dt>r / remainder - (integer)</dt>
