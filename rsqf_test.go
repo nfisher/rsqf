@@ -42,8 +42,7 @@ type block struct {
 	Offset     uint8
 	Occupieds  uint64
 	Runends    uint64
-	Remainder  [R_SIZE]uint64
-	Remainders uint64
+	Remainders [R_SIZE]uint64
 }
 
 // rank returns the number of 1s in Q.occupieds up to position i.
@@ -60,15 +59,15 @@ func pow2(exp uint64) uint64 {
 	return v << exp
 }
 
-// New returns a new CountingQuotientFilter with a fixed 1% error rate.
-func New(n float64) *CountingQuotientFilter {
+// New returns a new Rsqf with a fixed 1% error rate.
+func New(n float64) *Rsqf {
 	p := uint64(calcP(n, ERR_RATE))
 	q := p - R_SIZE
 	pmask := pow2(p) - 1
 	rmask := pow2(R_SIZE) - 1
 	qmask := pmask ^ rmask
 	qlen := int(pow2(q) / 64)
-	filter := &CountingQuotientFilter{
+	filter := &Rsqf{
 		p:         p,
 		remainder: R_SIZE,
 		rMask:     rmask,
@@ -80,7 +79,7 @@ func New(n float64) *CountingQuotientFilter {
 	return filter
 }
 
-type CountingQuotientFilter struct {
+type Rsqf struct {
 	p         uint64 // number of bits required to achieve the target error rate.
 	quotient  uint64 // number of bits that belong to the quotient.
 	qMask     uint64 // used to mask h0 bits of the hash.
@@ -91,7 +90,7 @@ type CountingQuotientFilter struct {
 
 // Hash applies a 64-bit hashing algorithm to b and then splits the
 // result into h0 and h1. Shifting h0 to the right by the remainder size.
-func (q *CountingQuotientFilter) Hash(b []byte) sum {
+func (q *Rsqf) Hash(b []byte) sum {
 	h := fnv.New64a()
 	h.Sum(b)
 	res := h.Sum64()
@@ -116,7 +115,7 @@ func MayContain(Q, x)
 	until l < b or Q.runends[l] = 1
   return false
 */
-func (q *CountingQuotientFilter) MayContain(x []byte) {
+func (q *Rsqf) MayContain(x []byte) {
 	//b := q.Hash(x)
 
 }
@@ -131,7 +130,7 @@ func FirstAvailableSlot(Q, x)
 		s <- select(Q.runends, t)
 	return x
 */
-func (q *CountingQuotientFilter) FirstAvailableSlot(x []byte) {
+func (q *Rsqf) FirstAvailableSlot(x []byte) {
 }
 
 /*
@@ -155,48 +154,35 @@ func Insert(Q, x)
 	Q.occupieds[h0(x)] <- 1
 	return
 */
-func (q *CountingQuotientFilter) Insert(x []byte) {
+func (q *Rsqf) Insert(x []byte) {
 	sum := q.Hash(x)
 	q.put(sum)
 }
 
-func (q *CountingQuotientFilter) put(s sum) {
-	var h0 uint64 = s.h0
-	var h1 uint64 = s.h1
-	idx := h0 / BLOCK_LEN
-	pos := h0 % BLOCK_LEN
-	var o uint64 = 0x01
-	var r1 uint64 = h1
-	var r2 uint64 = 0
+func (q *Rsqf) put(s sum) {
+	h0 := s.h0
+	bi := h0 / BLOCK_LEN
 
-	block := &q.Q[idx]
+	block := &q.Q[bi]
 
-	if pos < BLOCK_LEN-q.remainder {
-		// remaindeer fits in same block
-		sl := (BLOCK_LEN - pos - q.remainder)
-		r1 = h1 << sl
-		o = o << (sl + q.remainder - 1)
+	bpos := h0 % BLOCK_LEN
 
-		block.Remainders = block.Remainders | r1
-		block.Occupieds = block.Occupieds | o
-	} else if pos > BLOCK_LEN-q.remainder {
-		// overflows into next block
-		sr := (q.remainder - (BLOCK_LEN - pos))
-		r1 = h1 >> sr // bits drop bc uint doesn't wrap
-		r2 = h1 << (pos + sr)
-		o = o << (BLOCK_LEN - pos - 1)
+	var o uint64 = (0x01 << bpos)
+	block.Occupieds |= o
 
-		block.Remainders = block.Remainders | r1
-		block.Occupieds = block.Occupieds | o
+	var re uint64 = (0x01 << bpos)
+	block.Runends |= re
 
-		block2 := &q.Q[idx+1]
-		block2.Remainders = block2.Remainders | r2
-	} else {
-		// last position in block
-		o = o << (q.remainder - 1)
+	rpos := bpos * q.remainder
+	ri := rpos / BLOCK_LEN
+	low := (s.h1 << (rpos % BLOCK_LEN))
+	block.Remainders[ri] |= low
 
-		block.Remainders = block.Remainders | r1
-		block.Occupieds = block.Occupieds | o
+	// remainder spans multiple blocks
+	if rpos+q.remainder > (ri+1)*BLOCK_LEN {
+		ri2 := ri + 1
+		high := s.h1 >> (BLOCK_LEN - (rpos % BLOCK_LEN))
+		block.Remainders[ri2] |= high
 	}
 }
 
@@ -210,6 +196,10 @@ func Test_New_filter_should_be_initialised_correctly(t *testing.T) {
 
 	if 17 != f.quotient {
 		t.Errorf("want 17, got %v", f.quotient)
+	}
+
+	if 2048 != len(f.Q) {
+		t.Errorf("want len(Q) = 2048, got %v", len(f.Q))
 	}
 
 	var expected uint64 = 0x1FF
@@ -242,33 +232,111 @@ func Test_Hash_should_split_quotient_and_remainder_correctly(t *testing.T) {
 	}
 }
 
-func Test_put_within_same_block(t *testing.T) {
-	t.Skip()
+func Test_put_within_same_block_without_run(t *testing.T) {
 	td := [][]uint64{
-		// h0,   h1, Q[0].Remainder		 , Q[1].Remainders   , Q[1].Occupieds
-		// first block, shift left
-		{0x00, 0x07, 0xE000000000000000, 0x0000000000000000, 0x8000000000000000},
-		// first block, do nothing
-		{0x3D, 0x07, 0x0000000000000007, 0x0000000000000000, 0x0000000000000004},
-		// first block, shift right to second cell
-		{0x3E, 0x07, 0x0000000000000003, 0x8000000000000000, 0x0000000000000002},
+		// h0,   h1,        Q.occupieds,
+		//[0],	[1],				        [2],
+		// Q[0].Remainders[0], Q[0].Remainders[1], Q[0].Remainders[2],
+		// Q[0].Remainders[3], Q[0].Remainders[4], Q[0].Remainders[5],
+		// Q[0].Remainders[6], Q[0].Remainders[7], Q[0].Remainders[8]
+		// 0 - span 1st and 2nd r-bit cell
+		{0x07, 0x1FF, 0x0000000000000080,
+			0x8000000000000000, 0x00000000000000FF, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0},
+		// 1 - span 2nd and 3rd r-bit cell
+		{0x0E, 0x1FF, 0x0000000000004000,
+			0x0000000000000000, 0xC000000000000000, 0x000000000000007F,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0},
+		// 2 - span 3rd and 4th r-bit cell
+		{0x15, 0x1FF, 0x0000000000200000,
+			0x0000000000000000, 0x0000000000000000, 0xE000000000000000,
+			0x000000000000003F, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0},
+		// 3 - span 4th and 5th r-bit cell
+		{0x1C, 0x1FF, 0x0000000010000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0xF000000000000000, 0x000000000000001F, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0},
+		// 4 - span 5th and 6th r-bit cell
+		{0x23, 0x1FF, 0x0000000800000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0xF800000000000000, 0x000000000000000F,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0},
+		// 5 - span 6th and 7th r-bit cell
+		{0x2A, 0x1FF, 0x0000040000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0xFC00000000000000,
+			0x0000000000000007, 0x0000000000000000, 0x0000000000000000,
+			0},
+		// 6 - span 7th and 8th r-bit cell
+		{0x31, 0x1FF, 0x0002000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0xFE00000000000000, 0x0000000000000003, 0x0000000000000000,
+			0},
+		// 7 - span 8th and 9th r-bit cell
+		{0x38, 0x1FF, 0x0100000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0xFF00000000000000, 0x0000000000000001,
+			0},
+		// 8 - last entry, last r-bit cell
+		{0x3F, 0x1FF, 0x8000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0xFF80000000000000,
+			0},
+		// 9 - first entry, first r-bit cell
+		{0x00, 0x1FF, 0x0000000000000001,
+			0x00000000000001FF, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0},
+		// 10 - second entry, first r-bit cell
+		{0x01, 0x1FF, 0x0000000000000002,
+			0x000000000003FE00, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0},
+		// 11 - last block, last r-bit cell, last entry
+		{0x1FFFF, 0x1FF, 0x8000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000000, 0xFF80000000000000,
+			2047},
 	}
 
 	for i, v := range td {
 		f := New(100000)
 		s := sum{v[0], v[1]}
 		f.put(s)
+		b := v[12]
+		Q := f.Q[b]
 
-		if v[2] != f.Q[0].Remainders {
-			t.Errorf("[%v] want Q[0].Remainders = 0x%X, got 0x%X", i, v[2], f.Q[0].Remainders)
+		occupieds := v[2]
+		runends := occupieds // no runs so should be equal
+
+		if occupieds != Q.Occupieds {
+			t.Errorf("[%v] want Q[%v].Occupieds = 0x%X, got 0x%X", i, b, occupieds, Q.Occupieds)
 		}
 
-		if v[3] != f.Q[1].Remainders {
-			t.Errorf("[%v] want Q[1].Remainders = 0x%X, got 0x%X", i, v[3], f.Q[1].Remainders)
+		if runends != Q.Runends {
+			t.Errorf("[%v] want Q[%v].Runends = 0x%X, got 0x%X", i, b, runends, Q.Runends)
 		}
 
-		if v[4] != f.Q[0].Occupieds {
-			t.Errorf("[%v] want Q[0].Occupieds = 0x%X, got 0x%X", i, v[4], f.Q[0].Occupieds)
+		for j := 0; j < 9; j++ {
+			remainders := v[3+j]
+			if remainders != Q.Remainders[j] {
+				t.Errorf("[%v] want Q[%v].Remainders[%v] = 0x%X, got 0x%X",
+					i, b, j, remainders, Q.Remainders[j])
+			}
 		}
 	}
 }
@@ -291,9 +359,9 @@ func Test_packing_distance(t *testing.T) {
 	p0 := unsafe.Pointer(&f.Q[3])
 	p1 := unsafe.Pointer(&f.Q[4])
 	sz := unsafe.Sizeof(block{})
-	// 1 + 10 * 8
-	if sz != 0x68 {
-		t.Errorf("sz = 0x%X\n0x%X\n0x%X", sz, p0, p1)
+	// 1 + 11 * 8
+	if sz != 0x60 {
+		t.Errorf("got sz = 0x%X, want 0x60\n0x%X\n0x%X", sz, p0, p1)
 	}
 }
 
