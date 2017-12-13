@@ -27,7 +27,7 @@ const BLOCK_LEN = 64
 // could error if exceeds 2^52 for float64 fractional length but yer fooked
 // for in memory usage anyway unless ya got PB of memory lying around.
 func calcP(n, errRate float64) float64 {
-	// round up to ensure vector size is allocated correctly for target error rate.
+	// round up to ensure size is allocated correctly for target error rate.
 	return math.Ceil(math.Log2(n / errRate))
 }
 
@@ -156,16 +156,15 @@ func Insert(Q, x)
 */
 func (q *Rsqf) Insert(x []byte) {
 	sum := q.Hash(x)
-	q.put(sum)
+	q.put(sum.h0, sum.h1)
 }
 
-func (q *Rsqf) put(s sum) {
-	h0 := s.h0
+// put treats the Remainders block as a block of memory.
+func (q *Rsqf) put(h0, h1 uint64) {
 	bi := h0 / BLOCK_LEN
+	bpos := h0 % BLOCK_LEN
 
 	block := &q.Q[bi]
-
-	bpos := h0 % BLOCK_LEN
 
 	var o uint64 = (0x01 << bpos)
 	block.Occupieds |= o
@@ -175,15 +174,48 @@ func (q *Rsqf) put(s sum) {
 
 	rpos := bpos * q.remainder
 	ri := rpos / BLOCK_LEN
-	low := (s.h1 << (rpos % BLOCK_LEN))
+	low := (h1 << (rpos % BLOCK_LEN))
 	block.Remainders[ri] |= low
 
 	// remainder spans multiple blocks
 	if rpos+q.remainder > (ri+1)*BLOCK_LEN {
 		ri2 := ri + 1
-		high := s.h1 >> (BLOCK_LEN - (rpos % BLOCK_LEN))
+		high := h1 >> (BLOCK_LEN - (rpos % BLOCK_LEN))
 		block.Remainders[ri2] |= high
 	}
+}
+
+func oot(v uint64) uint64 {
+	if 0 == v {
+		return 0
+	}
+	return 1
+}
+
+// put2 treats each row in the Remainders block as a bit field
+// for the associated bit position in a given the remainder.
+func (q *Rsqf) put2(h0, h1 uint64) {
+	bi := h0 / BLOCK_LEN
+	bpos := h0 % BLOCK_LEN
+
+	block := &q.Q[bi]
+
+	var o uint64 = (0x01 << bpos)
+	block.Occupieds |= o
+
+	var re uint64 = (0x01 << bpos)
+	block.Runends |= re
+
+	// unrolled loop for performance.
+	block.Remainders[0] |= (oot(h1&1) << bpos)
+	block.Remainders[1] |= (oot(h1&2) << bpos)
+	block.Remainders[2] |= (oot(h1&4) << bpos)
+	block.Remainders[3] |= (oot(h1&8) << bpos)
+	block.Remainders[4] |= (oot(h1&8) << bpos)
+	block.Remainders[5] |= (oot(h1&16) << bpos)
+	block.Remainders[6] |= (oot(h1&32) << bpos)
+	block.Remainders[7] |= (oot(h1&64) << bpos)
+	block.Remainders[8] |= (oot(h1&128) << bpos)
 }
 
 // =============== tests
@@ -229,6 +261,42 @@ func Test_Hash_should_split_quotient_and_remainder_correctly(t *testing.T) {
 
 	if 0x125 != sum.h1 {
 		t.Errorf("want h1 = 0x125, got 0x%X", sum.h1)
+	}
+}
+
+func Test_put2(t *testing.T) {
+	td := [][]uint64{
+		{0x00, 0x1FF, 0x0000000000000001,
+			0x0000000000000001, 0x0000000000000001, 0x0000000000000001,
+			0x0000000000000001, 0x0000000000000001, 0x0000000000000001,
+			0x0000000000000001, 0x0000000000000001, 0x0000000000000001,
+			0},
+	}
+
+	for i, v := range td {
+		f := New(100000)
+		f.put2(v[0], v[1])
+		b := v[12]
+		Q := f.Q[b]
+
+		occupieds := v[2]
+		runends := occupieds // no runs so should be equal
+
+		if occupieds != Q.Occupieds {
+			t.Errorf("[%v] want Q[%v].Occupieds = 0x%X, got 0x%X", i, b, occupieds, Q.Occupieds)
+		}
+
+		if runends != Q.Runends {
+			t.Errorf("[%v] want Q[%v].Runends = 0x%X, got 0x%X", i, b, runends, Q.Runends)
+		}
+
+		for j := 0; j < 9; j++ {
+			remainders := v[3+j]
+			if remainders != Q.Remainders[j] {
+				t.Errorf("[%v] want Q[%v].Remainders[%v] = 0x%X, got 0x%X",
+					i, b, j, remainders, Q.Remainders[j])
+			}
+		}
 	}
 }
 
@@ -315,8 +383,7 @@ func Test_put_within_same_block_without_run(t *testing.T) {
 
 	for i, v := range td {
 		f := New(100000)
-		s := sum{v[0], v[1]}
-		f.put(s)
+		f.put(v[0], v[1])
 		b := v[12]
 		Q := f.Q[b]
 
@@ -354,12 +421,39 @@ func Benchmark_init(b *testing.B) {
 	}
 }
 
-func Test_packing_distance(t *testing.T) {
+func Benchmark_put_on_high_boundary(b *testing.B) {
+	f := New(100000)
+	r := f.Q[0].Remainders
+	for i := 0; i < b.N; i++ {
+		r[7] = 0 // skews the results a little but not enough to worry
+		r[8] = 0
+		f.put(0x38, 0x1FF)
+	}
+}
+
+func Benchmark_put2_on_high_cell(b *testing.B) {
+	f := New(100000)
+	r := f.Q[0].Remainders
+	for i := 0; i < b.N; i++ {
+		r[0] = 0
+		r[1] = 0
+		r[2] = 0
+		r[3] = 0
+		r[4] = 0
+		r[5] = 0
+		r[6] = 0
+		r[7] = 0
+		r[8] = 0
+		f.put(0x3F, 0x1FF)
+	}
+}
+
+func Test_struct_is_contiguous(t *testing.T) {
 	f := New(10000)
 	p0 := unsafe.Pointer(&f.Q[3])
 	p1 := unsafe.Pointer(&f.Q[4])
 	sz := unsafe.Sizeof(block{})
-	// 1 + 11 * 8
+	// 1(offset) + 11(occupieds, runends, remainders) * 8 + 1 (remainders len)
 	if sz != 0x60 {
 		t.Errorf("got sz = 0x%X, want 0x60\n0x%X\n0x%X", sz, p0, p1)
 	}
