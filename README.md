@@ -11,8 +11,10 @@ An RSQF provides:
  * insert
  * delete
  * lookup
- * resize
+ * resize<sup>1</sup>
  * merge
+
+1 - resize does not permit an increase in p but rather provides better locality of remainders to their home slot location.
 
 ## Overview
 
