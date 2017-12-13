@@ -161,6 +161,7 @@ func (q *Rsqf) Insert(x []byte) {
 
 // put treats the Remainders block as a block of memory.
 func (q *Rsqf) put(h0, h1 uint64) {
+	// ~10ns/op... le sigh complexity for now I suppose.
 	bi := h0 / BLOCK_LEN
 	bpos := h0 % BLOCK_LEN
 
@@ -195,6 +196,7 @@ func oot(v uint64) uint64 {
 // put2 treats each row in the Remainders block as a bit field
 // for the associated bit position in a given the remainder.
 func (q *Rsqf) put2(h0, h1 uint64) {
+	// ~16ns/op sadly 6ns slower than put()
 	bi := h0 / BLOCK_LEN
 	bpos := h0 % BLOCK_LEN
 
@@ -206,16 +208,17 @@ func (q *Rsqf) put2(h0, h1 uint64) {
 	var re uint64 = (0x01 << bpos)
 	block.Runends |= re
 
-	// unrolled loop for performance.
-	block.Remainders[0] |= (oot(h1&1) << bpos)
-	block.Remainders[1] |= (oot(h1&2) << bpos)
-	block.Remainders[2] |= (oot(h1&4) << bpos)
-	block.Remainders[3] |= (oot(h1&8) << bpos)
-	block.Remainders[4] |= (oot(h1&8) << bpos)
-	block.Remainders[5] |= (oot(h1&16) << bpos)
-	block.Remainders[6] |= (oot(h1&32) << bpos)
-	block.Remainders[7] |= (oot(h1&64) << bpos)
-	block.Remainders[8] |= (oot(h1&128) << bpos)
+	r := &block.Remainders
+
+	r[0] |= (oot(h1&1) << bpos)
+	r[1] |= (oot(h1&2) << bpos)
+	r[2] |= (oot(h1&4) << bpos)
+	r[3] |= (oot(h1&8) << bpos)
+	r[4] |= (oot(h1&16) << bpos)
+	r[5] |= (oot(h1&32) << bpos)
+	r[6] |= (oot(h1&64) << bpos)
+	r[7] |= (oot(h1&128) << bpos)
+	r[8] |= (oot(h1&256) << bpos)
 }
 
 // =============== tests
@@ -266,6 +269,11 @@ func Test_Hash_should_split_quotient_and_remainder_correctly(t *testing.T) {
 
 func Test_put2(t *testing.T) {
 	td := [][]uint64{
+		{0x00, 0x1F0, 0x0000000000000001,
+			0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+			0x0000000000000000, 0x0000000000000001, 0x0000000000000001,
+			0x0000000000000001, 0x0000000000000001, 0x0000000000000001,
+			0},
 		{0x00, 0x1FF, 0x0000000000000001,
 			0x0000000000000001, 0x0000000000000001, 0x0000000000000001,
 			0x0000000000000001, 0x0000000000000001, 0x0000000000000001,
@@ -433,17 +441,7 @@ func Benchmark_init(b *testing.B) {
 
 func Benchmark_put_on_high_boundary(b *testing.B) {
 	f := New(100000)
-	r := f.Q[0].Remainders
-	for i := 0; i < b.N; i++ {
-		r[7] = 0 // skews the results a little but not enough to worry
-		r[8] = 0
-		f.put(0x38, 0x1FF)
-	}
-}
-
-func Benchmark_put2_on_high_cell(b *testing.B) {
-	f := New(100000)
-	r := f.Q[0].Remainders
+	r := &f.Q[0].Remainders
 	for i := 0; i < b.N; i++ {
 		r[0] = 0
 		r[1] = 0
@@ -454,7 +452,24 @@ func Benchmark_put2_on_high_cell(b *testing.B) {
 		r[6] = 0
 		r[7] = 0
 		r[8] = 0
-		f.put(0x3F, 0x1FF)
+		f.put(0x38, 0x1FF)
+	}
+}
+
+func Benchmark_put2_on_high_cell(b *testing.B) {
+	f := New(100000)
+	r := &f.Q[0].Remainders
+	for i := 0; i < b.N; i++ {
+		r[0] = 0
+		r[1] = 0
+		r[2] = 0
+		r[3] = 0
+		r[4] = 0
+		r[5] = 0
+		r[6] = 0
+		r[7] = 0
+		r[8] = 0
+		f.put2(0x3F, 0x1FF)
 	}
 }
 
