@@ -19,6 +19,7 @@ func Test_put2_run_element(t *testing.T) {
 }
 
 func Test_put2_in_same_block_without_run(t *testing.T) {
+	t.Parallel()
 	td := [][]uint64{
 		// h0,   h1,        Q.occupieds,
 		// Q[0].Remainders[0], Q[0].Remainders[1], Q[0].Remainders[2],
@@ -80,6 +81,7 @@ func Test_put2_in_same_block_without_run(t *testing.T) {
 }
 
 func Test_put_in_same_block_without_run(t *testing.T) {
+	t.Parallel()
 	td := [][]uint64{
 		// h0,   h1,        Q.occupieds,
 		// Q[0].Remainders[0], Q[0].Remainders[1], Q[0].Remainders[2],
@@ -197,6 +199,7 @@ func Benchmark_init(b *testing.B) {
 func Benchmark_put_on_high_boundary(b *testing.B) {
 	f := New(100000)
 	r := &f.Q[0].Remainders
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		r[0] = 0
 		r[1] = 0
@@ -214,6 +217,7 @@ func Benchmark_put_on_high_boundary(b *testing.B) {
 func Benchmark_put2_on_high_cell(b *testing.B) {
 	f := New(100000)
 	r := &f.Q[0].Remainders
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		r[0] = 0
 		r[1] = 0
@@ -231,6 +235,7 @@ func Benchmark_put2_on_high_cell(b *testing.B) {
 func Benchmark_hashing(b *testing.B) {
 	f := New(10000000)
 	str := []byte("executed by the go test command when its -bench flag is provided")
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f.Hash(str)
 	}

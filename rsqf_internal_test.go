@@ -7,6 +7,7 @@ import (
 )
 
 func Test_New_filter_should_be_initialised_correctly(t *testing.T) {
+	t.Parallel()
 	f := New(100000)
 	if 26 != f.p {
 		t.Errorf("want 26, got %v", f.p)
@@ -32,6 +33,7 @@ func Test_New_filter_should_be_initialised_correctly(t *testing.T) {
 }
 
 func Test_Hash_should_split_quotient_and_remainder_correctly(t *testing.T) {
+	t.Parallel()
 	h := fnv.New64a()
 	h.Sum([]byte("Hello world"))
 	if 0xCBF29CE484222325 != h.Sum64() {
@@ -51,6 +53,7 @@ func Test_Hash_should_split_quotient_and_remainder_correctly(t *testing.T) {
 }
 
 func Test_struct_is_contiguous(t *testing.T) {
+	t.Parallel()
 	f := New(10000)
 	p0 := unsafe.Pointer(&f.Q[3])
 	p1 := unsafe.Pointer(&f.Q[4])
@@ -62,6 +65,7 @@ func Test_struct_is_contiguous(t *testing.T) {
 }
 
 func test_sample_p_values(t *testing.T) {
+	t.Parallel()
 	p := calcP(100000, 0.05)
 	if 0.1 != p {
 		t.Errorf("%v", p)
