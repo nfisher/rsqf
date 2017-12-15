@@ -16,6 +16,36 @@ import (
 )
 
 func Test_put2_run_element(t *testing.T) {
+	t.Skip()
+	t.Parallel()
+	f := New(100000)
+	f.Put2(0x00, 0x1F0)
+	f.Put2(0x00, 0x10F)
+
+	Q := f.Q[0]
+
+	var occupieds uint64 = 0x0000000000000001
+	if occupieds != Q.Occupieds {
+		t.Errorf("want Q[0].Occupieds = 0x%X, got 0x%X", occupieds, Q.Occupieds)
+	}
+
+	var runends uint64 = 0x0000000000000002
+	if runends != Q.Runends {
+		t.Errorf("want Q[0].Runends = 0x%X, got 0x%X", runends, Q.Runends)
+	}
+
+	td := []uint64{
+		0x0000000000000002, 0x0000000000000002, 0x0000000000000002, 0x0000000000000002,
+		0x0000000000000001, 0x0000000000000001, 0x0000000000000001, 0x0000000000000001,
+		0x0000000000000003,
+	}
+
+	for i, v := range td {
+		remainders := v
+		if remainders != Q.Remainders[i] {
+			t.Errorf("want Q[0].Remainders[%v] = 0x%X, got 0x%X", i, remainders, Q.Remainders[i])
+		}
+	}
 }
 
 func Test_put2_in_same_block_without_run(t *testing.T) {

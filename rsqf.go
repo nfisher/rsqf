@@ -34,8 +34,40 @@ type block struct {
 	Remainders [R_SIZE]uint64
 }
 
+var RANK_TABLE [16]uint64 = [16]uint64{
+	//0, 1, 2, 3, 4, 5, 6, 7, 8, 9, A, B, C, D, E, F
+	0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
+}
+
+const ONE uint64 = 0x1
+const RANK_MASK uint64 = 0x0F
+
 // rank returns the number of 1s in Q.occupieds up to position i.
-func rank(Q []block, i int) {
+func Rank(B uint64, i uint64) uint64 {
+	masked := B & ((ONE << i) - 1)
+
+	// TODO: Look into using SIMD for this junk.
+	c0 := RANK_TABLE[masked&RANK_MASK]
+	c1 := RANK_TABLE[(masked>>4)&RANK_MASK]
+	c2 := RANK_TABLE[(masked>>8)&RANK_MASK]
+	c3 := RANK_TABLE[(masked>>12)&RANK_MASK]
+
+	c4 := RANK_TABLE[(masked>>16)&RANK_MASK]
+	c5 := RANK_TABLE[(masked>>20)&RANK_MASK]
+	c6 := RANK_TABLE[(masked>>24)&RANK_MASK]
+	c7 := RANK_TABLE[(masked>>28)&RANK_MASK]
+
+	c8 := RANK_TABLE[(masked>>32)&RANK_MASK]
+	c9 := RANK_TABLE[(masked>>36)&RANK_MASK]
+	c10 := RANK_TABLE[(masked>>40)&RANK_MASK]
+	c11 := RANK_TABLE[(masked>>44)&RANK_MASK]
+
+	c12 := RANK_TABLE[(masked>>48)&RANK_MASK]
+	c13 := RANK_TABLE[(masked>>52)&RANK_MASK]
+	c14 := RANK_TABLE[(masked>>56)&RANK_MASK]
+	c15 := RANK_TABLE[(masked>>60)&RANK_MASK]
+
+	return c0 + c1 + c2 + c3 + c4 + c5 + c6 + c7 + c8 + c9 + c10 + c11 + c12 + c13 + c14 + c15
 }
 
 // seleccionar returns the index of the ith 1 in Q.runends.
@@ -79,14 +111,10 @@ type Rsqf struct {
 
 // Hash applies a 64-bit hashing algorithm to b and then splits the
 // result into h0 and h1. Shifting h0 to the right by the remainder size.
-func (q *Rsqf) Hash(b []byte) sum {
+func (q *Rsqf) Hash(b []byte) uint64 {
 	h := fnv.New64a()
 	h.Sum(b)
-	res := h.Sum64()
-	return sum{
-		h0: (res & q.qMask) >> q.remainder,
-		h1: res & q.rMask,
-	}
+	return h.Sum64()
 }
 
 /*
@@ -144,8 +172,12 @@ func Insert(Q, x)
 	return
 */
 func (q *Rsqf) Insert(x []byte) {
-	sum := q.Hash(x)
-	q.Put(sum.h0, sum.h1)
+	res := q.Hash(x)
+
+	h0 := (res & q.qMask) >> q.remainder
+	h1 := res & q.rMask
+
+	q.Put(h0, h1)
 }
 
 // Put treats the Remainders block as a block of memory.
@@ -197,15 +229,15 @@ func (q *Rsqf) Put2(h0, h1 uint64) {
 	var re uint64 = (0x01 << bpos)
 	block.Runends |= re
 
-	r := &block.Remainders
+	//r := &block.Remainders
 
-	r[0] |= (oot(h1&1) << bpos)
-	r[1] |= (oot(h1&2) << bpos)
-	r[2] |= (oot(h1&4) << bpos)
-	r[3] |= (oot(h1&8) << bpos)
-	r[4] |= (oot(h1&16) << bpos)
-	r[5] |= (oot(h1&32) << bpos)
-	r[6] |= (oot(h1&64) << bpos)
-	r[7] |= (oot(h1&128) << bpos)
-	r[8] |= (oot(h1&256) << bpos)
+	block.Remainders[0] |= (oot(h1&1) << bpos)
+	block.Remainders[1] |= (oot(h1&2) << bpos)
+	block.Remainders[2] |= (oot(h1&4) << bpos)
+	block.Remainders[3] |= (oot(h1&8) << bpos)
+	block.Remainders[4] |= (oot(h1&16) << bpos)
+	block.Remainders[5] |= (oot(h1&32) << bpos)
+	block.Remainders[6] |= (oot(h1&64) << bpos)
+	block.Remainders[7] |= (oot(h1&128) << bpos)
+	block.Remainders[8] |= (oot(h1&256) << bpos)
 }

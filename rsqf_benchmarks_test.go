@@ -48,11 +48,18 @@ func Benchmark_put2_on_high_cell(b *testing.B) {
 	}
 }
 
-func Benchmark_hashing(b *testing.B) {
+func Benchmark_Hash(b *testing.B) {
 	f := New(10000000)
 	str := []byte("executed by the go test command when its -bench flag is provided")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f.Hash(str)
+	}
+}
+
+func Benchmark_Rank(b *testing.B) {
+	var v uint64 = 0xFFFFFFFFFFFFFFFF
+	for i := 0; i < b.N; i++ {
+		Rank(v, 64)
 	}
 }

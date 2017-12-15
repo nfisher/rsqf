@@ -1,10 +1,39 @@
 package rsqf
 
 import (
-	"hash/fnv"
 	"testing"
 	"unsafe"
 )
+
+func Test_Rank(t *testing.T) {
+	td := [][]uint64{
+		// input, expected
+		{0x0, 0},
+		{0x1, 1},
+		{0x2, 1},
+		{0x3, 2},
+		{0x4, 1},
+		{0x5, 2},
+		{0x6, 2},
+		{0x7, 3},
+		{0x8, 1},
+		{0x9, 2},
+		{0xA, 2},
+		{0xB, 3},
+		{0xC, 2},
+		{0xD, 3},
+		{0xE, 3},
+		{0xF, 4},
+		{0xFFFFFFFFFFFFFFFF, 64},
+	}
+
+	for i, v := range td {
+		a := Rank(v[0], 64)
+		if v[1] != a {
+			t.Errorf("[%v] want rank(B, 63) = %v, got %v", i, v[1], a)
+		}
+	}
+}
 
 func Test_New_filter_should_be_initialised_correctly(t *testing.T) {
 	t.Parallel()
@@ -32,23 +61,14 @@ func Test_New_filter_should_be_initialised_correctly(t *testing.T) {
 	}
 }
 
-func Test_Hash_should_split_quotient_and_remainder_correctly(t *testing.T) {
+func Test_Hash_should_provide_expected_sum(t *testing.T) {
 	t.Parallel()
-	h := fnv.New64a()
-	h.Sum([]byte("Hello world"))
-	if 0xCBF29CE484222325 != h.Sum64() {
-		t.Errorf("want Sum64 = 0xCBF29CE484222325, got 0x%X", h.Sum64())
-	}
 
 	f := New(100000)
 	sum := f.Hash([]byte("Hello world"))
 
-	if 0x1111 != sum.h0 {
-		t.Errorf("want h0 = 0x1111, got 0x%X", sum.h0)
-	}
-
-	if 0x125 != sum.h1 {
-		t.Errorf("want h1 = 0x125, got 0x%X", sum.h1)
+	if 0xCBF29CE484222325 != sum {
+		t.Errorf("want sum = 0xCBF29CE484222325, got 0x%X", sum)
 	}
 }
 
