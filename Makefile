@@ -3,21 +3,19 @@ SHELL := /bin/sh
 SRC := $(wildcard *.go)
 
 .PHONY: all
-all: vet cov bench
+all: vet.out coverage.out bench.out
 
-.PHONY: bench
-bench: $(SRC)
-	go test -bench .
+bench.out: $(SRC)
+	go test -bench . | tee bench.out
 
-coverage.out: $(SRC)
+cover.out: $(SRC)
 	go test -v -cover -covermode atomic -coverprofile cover.out ./...
 
-coverage.html: coverage.out
+coverage.html: cover.out
 	go tool cover -html=cover.out -o coverage.html
 
-.PHONY: cov
-cov: coverage.out
-	go tool cover -func=cover.out
+coverage.out: cover.out
+	go tool cover -func=cover.out | tee coverage.out
 
 .PHONY: clean
 clean:
@@ -29,7 +27,6 @@ fast: vet cov
 .PHONY: test
 test: coverage.out
 
-.PHONY: vet
-vet: $(SRC)
-	go vet -v .
+vet.out: $(SRC)
+	go vet -v . | tee vet.out
 
