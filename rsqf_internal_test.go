@@ -5,32 +5,84 @@ import (
 	"unsafe"
 )
 
-func Test_Rank(t *testing.T) {
+func Test_FirstAvailableSlot(t *testing.T) {
+	t.Parallel()
 	td := [][]uint64{
-		// input, expected
-		{0x0, 0},
-		{0x1, 1},
-		{0x2, 1},
-		{0x3, 2},
-		{0x4, 1},
-		{0x5, 2},
-		{0x6, 2},
-		{0x7, 3},
-		{0x8, 1},
-		{0x9, 2},
-		{0xA, 2},
-		{0xB, 3},
-		{0xC, 2},
-		{0xD, 3},
-		{0xE, 3},
-		{0xF, 4},
-		{0xFFFFFFFFFFFFFFFF, 64},
+		// x, occupieds, runends, expected
+		{0x00, 0x00, 0x00, 0x00},
+		{0x00, 0x01, 0x01, 0x01},
+		{0x00, 0x01, 0x08, 0x04},
+		{0x01, 0x01, 0x02, 0x02},
+		{0x00, 0x01, 0x02, 0x02},
+		{0x00, 0x01, 0x04, 0x03},
+		{0x02, 0x02, 0x02, 0x02},
+		{0x02, 0x02, 0x04, 0x03},
+		{0x03, 0x0F, 0x0F, 0x04},
+		{0x80, 0x00, 0x00, 0x80},
 	}
 
 	for i, v := range td {
-		a := Rank(v[0], 64)
-		if v[1] != a {
-			t.Errorf("[%v] want rank(B, 63) = %v, got %v", i, v[1], a)
+		f := New(100000)
+
+		f.Q[0].Occupieds = v[1]
+		f.Q[0].Runends = v[2]
+
+		x := v[0]
+		actual := f.FirstAvailableSlot(x)
+		expected := v[3]
+		if expected != actual {
+			t.Errorf("[%v] want FAS(0x%X) = %v, got %v",
+				i, x, expected, actual)
+		}
+	}
+}
+
+func Test_Select(t *testing.T) {
+	t.Parallel()
+	td := [][]uint64{
+		// B, count, expected
+		{0x0, 1, 64},
+		{0x1, 1, 0},
+		{0x3, 2, 1},
+		//xFFFFFFFFFFFFFFFF
+		{0x8800000000000000, 2, 63},
+		{0x8000000000000000, 1, 63},
+	}
+
+	for i, v := range td {
+		a := Select(v[0], v[1])
+		if v[2] != a {
+			t.Errorf("[%v] want select(B, %v) = %v, got %v", i, v[1], v[2], a)
+		}
+	}
+}
+
+func Test_Rank(t *testing.T) {
+	td := [][]uint64{
+		// input, pos, expected
+		{0x0, 64, 0},
+		{0x1, 0, 1},
+		{0x2, 1, 1},
+		{0x3, 1, 2},
+		{0x4, 64, 1},
+		{0x5, 64, 2},
+		{0x6, 64, 2},
+		{0x7, 64, 3},
+		{0x8, 64, 1},
+		{0x9, 64, 2},
+		{0xA, 64, 2},
+		{0xB, 64, 3},
+		{0xC, 64, 2},
+		{0xD, 64, 3},
+		{0xE, 64, 3},
+		{0xF, 64, 4},
+		{0xFFFFFFFFFFFFFFFF, 64, 64},
+	}
+
+	for i, v := range td {
+		a := Rank(v[0], 63)
+		if v[2] != a {
+			t.Errorf("[%v] want rank(B, 63) = %v, got %v", i, v[2], a)
 		}
 	}
 }

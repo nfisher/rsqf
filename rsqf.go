@@ -34,7 +34,7 @@ type block struct {
 	Remainders [R_SIZE]uint64
 }
 
-var RANK_TABLE [16]uint64 = [16]uint64{
+var RANK_NIBBLE_TABLE [16]uint64 = [16]uint64{
 	//0, 1, 2, 3, 4, 5, 6, 7, 8, 9, A, B, C, D, E, F
 	0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
 }
@@ -42,36 +42,93 @@ var RANK_TABLE [16]uint64 = [16]uint64{
 const ONE uint64 = 0x1
 const RANK_MASK uint64 = 0x0F
 
-// rank returns the number of 1s in Q.occupieds up to position i.
-func Rank(B uint64, i uint64) uint64 {
-	masked := B & ((ONE << i) - 1)
+// Rank returns the number of 1s in B up to position i.
+func Rank(B, i uint64) uint64 {
+	masked := B & ((ONE << (i + 1)) - 1)
 
-	// TODO: Look into using SIMD for this junk.
-	c0 := RANK_TABLE[masked&RANK_MASK]
-	c1 := RANK_TABLE[(masked>>4)&RANK_MASK]
-	c2 := RANK_TABLE[(masked>>8)&RANK_MASK]
-	c3 := RANK_TABLE[(masked>>12)&RANK_MASK]
+	// TODO: Look into using SIMD for this junk or create a 1-byte table
+	c0 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	masked = masked >> 4
+	c1 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	masked = masked >> 4
+	c2 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	masked = masked >> 4
+	c3 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
 
-	c4 := RANK_TABLE[(masked>>16)&RANK_MASK]
-	c5 := RANK_TABLE[(masked>>20)&RANK_MASK]
-	c6 := RANK_TABLE[(masked>>24)&RANK_MASK]
-	c7 := RANK_TABLE[(masked>>28)&RANK_MASK]
+	masked = masked >> 4
+	c4 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	masked = masked >> 4
+	c5 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	masked = masked >> 4
+	c6 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	masked = masked >> 4
+	c7 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
 
-	c8 := RANK_TABLE[(masked>>32)&RANK_MASK]
-	c9 := RANK_TABLE[(masked>>36)&RANK_MASK]
-	c10 := RANK_TABLE[(masked>>40)&RANK_MASK]
-	c11 := RANK_TABLE[(masked>>44)&RANK_MASK]
+	masked = masked >> 4
+	c8 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	masked = masked >> 4
+	c9 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	masked = masked >> 4
+	c10 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	masked = masked >> 4
+	c11 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
 
-	c12 := RANK_TABLE[(masked>>48)&RANK_MASK]
-	c13 := RANK_TABLE[(masked>>52)&RANK_MASK]
-	c14 := RANK_TABLE[(masked>>56)&RANK_MASK]
-	c15 := RANK_TABLE[(masked>>60)&RANK_MASK]
+	masked = masked >> 4
+	c12 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	masked = masked >> 4
+	c13 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	masked = masked >> 4
+	c14 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	masked = masked >> 4
+	c15 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
 
-	return c0 + c1 + c2 + c3 + c4 + c5 + c6 + c7 + c8 + c9 + c10 + c11 + c12 + c13 + c14 + c15
+	return c0 + c1 + c2 + c3 + c4 + c5 + c6 + c7 +
+		c8 + c9 + c10 + c11 + c12 + c13 + c14 + c15
 }
 
-// seleccionar returns the index of the ith 1 in Q.runends.
-func seleccionar(Q []block, i int) {
+// Select returns the index of the ith 1 in B.
+// References:
+//  https://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetParallel
+func Select(B, i uint64) uint64 {
+	/*
+	   uint64_t v;          // Input value to find position with rank r.
+	   unsigned int r;      // Input: bit's desired rank [1-64].
+	   unsigned int s;      // Output: Resulting position of bit with rank r [1-64]
+	   uint64_t a, b, c, d; // Intermediate temporaries for bit count.
+	   unsigned int t;      // Bit count temporary.
+
+	   // Do a normal parallel bit count for a 64-bit integer,
+	   // but store all intermediate steps.
+	   a =  v - ((v >> 1) & ~0UL/3);
+	   b = (a & ~0UL/5) + ((a >> 2) & ~0UL/5);
+	   c = (b + (b >> 4)) & ~0UL/0x11;
+	   d = (c + (c >> 8)) & ~0UL/0x101;
+	   t = (d >> 32) + (d >> 48);
+
+	   // Now do branchless select!
+	   s  = 64;
+	   s -= ((t - r) & 256) >> 3; r -= (t & ((t - r) >> 8));
+	   t  = (d >> (s - 16)) & 0xff;
+	   s -= ((t - r) & 256) >> 4; r -= (t & ((t - r) >> 8));
+	   t  = (c >> (s - 8)) & 0xf;
+	   s -= ((t - r) & 256) >> 5; r -= (t & ((t - r) >> 8));
+	   t  = (b >> (s - 4)) & 0x7;
+	   s -= ((t - r) & 256) >> 6; r -= (t & ((t - r) >> 8));
+	   t  = (a >> (s - 2)) & 0x3;
+	   s -= ((t - r) & 256) >> 7; r -= (t & ((t - r) >> 8));
+	   t  = (v >> (s - 1)) & 0x1;
+	   s -= ((t - r) & 256) >> 8;
+	   s = 65 - s;
+	*/
+	var c uint64 = 0
+	var j uint64 = 0
+	for ; j < 64; j++ {
+		c += (B >> j) & 0x1
+		if i == c {
+			return j
+		}
+	}
+	return 64
 }
 
 // pow2 calculates 2^exp using the shift left operator.
@@ -143,11 +200,29 @@ func FirstAvailableSlot(Q, x)
 	s <- select(Q.runends, r)
 	while x <= s do
 		x <- s + 1
-		r <- rank(Q.occupieds, b)
-		s <- select(Q.runends, t)
+		r <- rank(Q.occupieds, x)
+		s <- select(Q.runends, r)
 	return x
 */
-func (q *Rsqf) FirstAvailableSlot(x []byte) {
+func (q *Rsqf) FirstAvailableSlot(x uint64) uint64 {
+	bi := x / BLOCK_LEN
+	bpos := x % BLOCK_LEN
+
+	r := Rank(q.Q[bi].Occupieds, bpos)
+	s := Select(q.Q[bi].Runends, r)
+
+	if r == 0 && s == 0 {
+		return x
+	}
+
+	for x <= s {
+		x = s + 1
+		bi = x / BLOCK_LEN
+		bpos = x % BLOCK_LEN
+		r = Rank(q.Q[bi].Occupieds, bpos)
+		s = Select(q.Q[bi].Runends, r)
+	}
+	return x
 }
 
 /*
@@ -171,13 +246,25 @@ func Insert(Q, x)
 	Q.occupieds[h0(x)] <- 1
 	return
 */
-func (q *Rsqf) Insert(x []byte) {
-	res := q.Hash(x)
-
+func (q *Rsqf) Insert(res uint64) {
 	h0 := (res & q.qMask) >> q.remainder
 	h1 := res & q.rMask
 
-	q.Put(h0, h1)
+	bi := h0 / BLOCK_LEN
+	bpos := h0 % BLOCK_LEN
+
+	r := Rank(q.Q[bi].Occupieds, bpos)
+	s := Select(q.Q[bi].Runends, r)
+
+	if h0 > s || (r == 0 && s == 0) {
+		var re uint64 = (0x01 << bpos)
+
+		q.Put(h0, h1)
+		q.Q[bi].Runends |= re
+	}
+
+	var o uint64 = (0x01 << bpos)
+	q.Q[bi].Occupieds |= o
 }
 
 // Put treats the Remainders block as a block of memory.
@@ -187,12 +274,6 @@ func (q *Rsqf) Put(h0, h1 uint64) {
 	bpos := h0 % BLOCK_LEN
 
 	block := &q.Q[bi]
-
-	var o uint64 = (0x01 << bpos)
-	block.Occupieds |= o
-
-	var re uint64 = (0x01 << bpos)
-	block.Runends |= re
 
 	rpos := bpos * q.remainder
 	ri := rpos / BLOCK_LEN
@@ -222,14 +303,6 @@ func (q *Rsqf) Put2(h0, h1 uint64) {
 	bpos := h0 % BLOCK_LEN
 
 	block := &q.Q[bi]
-
-	var o uint64 = (0x01 << bpos)
-	block.Occupieds |= o
-
-	var re uint64 = (0x01 << bpos)
-	block.Runends |= re
-
-	//r := &block.Remainders
 
 	block.Remainders[0] |= (oot(h1&1) << bpos)
 	block.Remainders[1] |= (oot(h1&2) << bpos)

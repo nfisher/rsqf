@@ -15,24 +15,57 @@ import (
 	. "github.com/nfisher/rsqf"
 )
 
-func Test_put2_run_element(t *testing.T) {
-	t.Skip()
+func Test_Insert_simple_run(t *testing.T) {
+	t.Parallel()
+}
+
+func Test_Insert_simple(t *testing.T) {
+	t.Parallel()
+	td := [][]uint64{
+		// insert, runends, occupieds
+		{0x01F0, 0x01, 0x01,
+			0x01F0, 0x0, 0x0,
+			0x0, 0x0, 0x0,
+			0x0, 0x0, 0x0},
+		{0x03F0, 0x02, 0x02,
+			0x3E000, 0x0, 0x0,
+			0x0, 0x0, 0x0,
+			0x0, 0x0, 0x0},
+	}
+
+	for i, v := range td {
+		h := v[0]
+		re := v[1]
+		o := v[2]
+
+		f := New(100000)
+		f.Insert(h)
+
+		if re != f.Q[0].Runends {
+			t.Errorf("[%v] want Q[0].Runends = 0x%X, got 0x%X",
+				i, re, f.Q[0].Runends)
+		}
+
+		if o != f.Q[0].Occupieds {
+			t.Errorf("[%v] want Q[0].Occupieds = 0x%X, got 0x%X",
+				i, o, f.Q[0].Occupieds)
+		}
+
+		r0 := v[3]
+		if r0 != f.Q[0].Remainders[0] {
+			t.Errorf("[%v] want Q[0].Remainders = 0x%X, got 0x%X",
+				i, r0, f.Q[0].Remainders[0])
+		}
+	}
+}
+
+func Test_Put2_run_element(t *testing.T) {
 	t.Parallel()
 	f := New(100000)
 	f.Put2(0x00, 0x1F0)
-	f.Put2(0x00, 0x10F)
+	f.Put2(0x01, 0x10F)
 
 	Q := f.Q[0]
-
-	var occupieds uint64 = 0x0000000000000001
-	if occupieds != Q.Occupieds {
-		t.Errorf("want Q[0].Occupieds = 0x%X, got 0x%X", occupieds, Q.Occupieds)
-	}
-
-	var runends uint64 = 0x0000000000000002
-	if runends != Q.Runends {
-		t.Errorf("want Q[0].Runends = 0x%X, got 0x%X", runends, Q.Runends)
-	}
 
 	td := []uint64{
 		0x0000000000000002, 0x0000000000000002, 0x0000000000000002, 0x0000000000000002,
@@ -48,7 +81,7 @@ func Test_put2_run_element(t *testing.T) {
 	}
 }
 
-func Test_put2_in_same_block_without_run(t *testing.T) {
+func Test_Put2_in_same_block_without_run(t *testing.T) {
 	t.Parallel()
 	td := [][]uint64{
 		// h0,   h1,        Q.occupieds,
@@ -89,17 +122,6 @@ func Test_put2_in_same_block_without_run(t *testing.T) {
 		b := v[12]
 		Q := f.Q[b]
 
-		occupieds := v[2]
-		runends := occupieds // no runs so should be equal
-
-		if occupieds != Q.Occupieds {
-			t.Errorf("[%v] want Q[%v].Occupieds = 0x%X, got 0x%X", i, b, occupieds, Q.Occupieds)
-		}
-
-		if runends != Q.Runends {
-			t.Errorf("[%v] want Q[%v].Runends = 0x%X, got 0x%X", i, b, runends, Q.Runends)
-		}
-
 		for j := 0; j < 9; j++ {
 			remainders := v[3+j]
 			if remainders != Q.Remainders[j] {
@@ -110,7 +132,7 @@ func Test_put2_in_same_block_without_run(t *testing.T) {
 	}
 }
 
-func Test_put_in_same_block_without_run(t *testing.T) {
+func Test_Put_in_same_block_without_run(t *testing.T) {
 	t.Parallel()
 	td := [][]uint64{
 		// h0,   h1,        Q.occupieds,
@@ -198,17 +220,6 @@ func Test_put_in_same_block_without_run(t *testing.T) {
 		f.Put(v[0], v[1])
 		b := v[12]
 		Q := f.Q[b]
-
-		occupieds := v[2]
-		runends := occupieds // no runs so should be equal
-
-		if occupieds != Q.Occupieds {
-			t.Errorf("[%v] want Q[%v].Occupieds = 0x%X, got 0x%X", i, b, occupieds, Q.Occupieds)
-		}
-
-		if runends != Q.Runends {
-			t.Errorf("[%v] want Q[%v].Runends = 0x%X, got 0x%X", i, b, runends, Q.Runends)
-		}
 
 		for j := 0; j < 9; j++ {
 			remainders := v[3+j]
