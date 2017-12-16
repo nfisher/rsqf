@@ -14,7 +14,13 @@ An RSQF provides:
  * resize<sup>1</sup>
  * merge
 
-1 - resize does not permit an increase in p but rather provides better locality of remainders to their home slot location.
+1 - resize does not permit an increase in p (e.g. unique identity capacity). 
+It does however increase the total number of available slots. This provides
+two benefits:
+
+  1. Faster queries as the remainders can be aligned closer to their home slot
+     with shorter runs.
+  2. Increase in the number of entries allowing for deletion.
 
 ## Overview
 
@@ -26,6 +32,18 @@ r is therefore fixed at 9 (`r = log2(1/0.001953)`). q will vary relative to p
 
 A filter that accepts 1 million entries will require ~11.67 bits per entry and
 require approximately 1.46MB (Si) of memory.
+
+## Status
+
+  - [-] Rank
+  - [-] Select
+  - [x] Hash (fnv, might consider Murmur3, CityHash, or xxHash)
+  - [ ] FirstAvailableSlot
+  - [ ] Insert
+  - [ ] MayContain
+  - [ ] Resize
+  - [ ] Merge
+  - [ ] Count (CQF)
 
 ## Sizing
 
