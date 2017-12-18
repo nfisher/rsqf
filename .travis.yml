@@ -8,4 +8,6 @@ before_install:
   - go get github.com/mattn/goveralls
 script:
   - make
-  - $GOPATH/bin/goveralls -service=travis-ci
+after_success:
+  - mv cover.out coverage.txt
+  - bash <(curl -s https://codecov.io/bash) -t 80b5219a-0e52-4df2-9e79-e750eec0c854
