@@ -17,6 +17,19 @@ import (
 
 func Test_Insert_simple_run(t *testing.T) {
 	t.Parallel()
+	f := New(100000)
+	f.Insert(0x01F0)
+	f.Insert(0x01FF)
+
+	if 0x02 != f.Q[0].Runends {
+		t.Errorf("want Q[0].Runends = 0x%X, got 0x%X",
+			0x02, f.Q[0].Runends)
+	}
+
+	if 0x01 != f.Q[0].Occupieds {
+		t.Errorf("want Q[0].Occupieds = 0x%X, got 0x%X",
+			0x01, f.Q[0].Occupieds)
+	}
 }
 
 func Test_Insert_simple(t *testing.T) {

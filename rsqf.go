@@ -1,13 +1,14 @@
 package rsqf
 
 import (
+	"errors"
 	"hash/fnv"
 	"math"
 )
 
-const ERR_RATE float64 = 1.0 / 512.0
-const R_SIZE = 9 // log2(1/ERR_RATE)
-const BLOCK_LEN = 64
+const errRate float64 = 1.0 / 512.0
+const rSize = 9 // log2(1/ERR_RATE)
+const blockLen = 64
 
 // calcP calculates the p exponent for the universe.
 // n is the maximum number of insertions.
@@ -31,56 +32,56 @@ type block struct {
 	Offset     uint8
 	Occupieds  uint64
 	Runends    uint64
-	Remainders [R_SIZE]uint64
+	Remainders [rSize]uint64
 }
 
-var RANK_NIBBLE_TABLE [16]uint64 = [16]uint64{
+var rankNibbleTable = [16]uint64{
 	//0, 1, 2, 3, 4, 5, 6, 7, 8, 9, A, B, C, D, E, F
 	0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
 }
 
-const ONE uint64 = 0x1
-const RANK_MASK uint64 = 0x0F
+const one uint64 = 0x1
+const rankMask uint64 = 0x0F
 
 // Rank returns the number of 1s in B up to position i.
 func Rank(B, i uint64) uint64 {
-	masked := B & ((ONE << (i + 1)) - 1)
+	masked := B & ((one << (i + 1)) - 1)
 
 	// TODO: Look into using SIMD for this junk or create a 1-byte table
-	c0 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c0 := rankNibbleTable[masked&rankMask]
 	masked = masked >> 4
-	c1 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c1 := rankNibbleTable[masked&rankMask]
 	masked = masked >> 4
-	c2 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c2 := rankNibbleTable[masked&rankMask]
 	masked = masked >> 4
-	c3 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c3 := rankNibbleTable[masked&rankMask]
 
 	masked = masked >> 4
-	c4 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c4 := rankNibbleTable[masked&rankMask]
 	masked = masked >> 4
-	c5 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c5 := rankNibbleTable[masked&rankMask]
 	masked = masked >> 4
-	c6 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c6 := rankNibbleTable[masked&rankMask]
 	masked = masked >> 4
-	c7 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c7 := rankNibbleTable[masked&rankMask]
 
 	masked = masked >> 4
-	c8 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c8 := rankNibbleTable[masked&rankMask]
 	masked = masked >> 4
-	c9 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c9 := rankNibbleTable[masked&rankMask]
 	masked = masked >> 4
-	c10 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c10 := rankNibbleTable[masked&rankMask]
 	masked = masked >> 4
-	c11 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c11 := rankNibbleTable[masked&rankMask]
 
 	masked = masked >> 4
-	c12 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c12 := rankNibbleTable[masked&rankMask]
 	masked = masked >> 4
-	c13 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c13 := rankNibbleTable[masked&rankMask]
 	masked = masked >> 4
-	c14 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c14 := rankNibbleTable[masked&rankMask]
 	masked = masked >> 4
-	c15 := RANK_NIBBLE_TABLE[masked&RANK_MASK]
+	c15 := rankNibbleTable[masked&rankMask]
 
 	return c0 + c1 + c2 + c3 + c4 + c5 + c6 + c7 +
 		c8 + c9 + c10 + c11 + c12 + c13 + c14 + c15
@@ -120,8 +121,8 @@ func Select(B, i uint64) uint64 {
 	   s -= ((t - r) & 256) >> 8;
 	   s = 65 - s;
 	*/
-	var c uint64 = 0
-	var j uint64 = 0
+	var c uint64
+	var j uint64
 	for ; j < 64; j++ {
 		c += (B >> j) & 0x1
 		if i == c {
@@ -139,15 +140,15 @@ func pow2(exp uint64) uint64 {
 
 // New returns a new Rsqf with a fixed 1% error rate.
 func New(n float64) *Rsqf {
-	p := uint64(calcP(n, ERR_RATE))
-	q := p - R_SIZE
+	p := uint64(calcP(n, errRate))
+	q := p - rSize
 	pmask := pow2(p) - 1
-	rmask := pow2(R_SIZE) - 1
+	rmask := pow2(rSize) - 1
 	qmask := pmask ^ rmask
 	qlen := int(pow2(q) / 64)
 	filter := &Rsqf{
 		p:         p,
-		remainder: R_SIZE,
+		remainder: rSize,
 		rMask:     rmask,
 		quotient:  q,
 		qMask:     qmask,
@@ -157,6 +158,9 @@ func New(n float64) *Rsqf {
 	return filter
 }
 
+// Rsqf is the core datastructure for this filter. Might evolve to using
+// a 64-bit array which expands the filters size to 3-bits + r per slot from
+// 2.125 + r.
 type Rsqf struct {
 	p         uint64 // number of bits required to achieve the target error rate.
 	quotient  uint64 // number of bits that belong to the quotient.
@@ -175,6 +179,9 @@ func (q *Rsqf) Hash(b []byte) uint64 {
 }
 
 /*
+MayContain tests if the hash exists in this filter. False positives are possible
+however false negatives cannot occur.
+
 func MayContain(Q, x)
 	b <- h0(x)
 	if Q.occupieds[b] = 0 then
@@ -194,8 +201,14 @@ func (q *Rsqf) MayContain(x []byte) {
 
 }
 
+// ErrFilterOverflow is returned if an insert would result in an overflow within
+// the filter.
+var ErrFilterOverflow = errors.New("RSQF overflow")
+
 /*
-func FirstAvailableSlot(Q, x)
+firstAvailableSlot finds the first available slot for the hash x in this filter.
+
+func firstAvailableSlot(Q, x)
 	r <- rank(Q.occupieds, x)
 	s <- select(Q.runends, r)
 	while x <= s do
@@ -204,28 +217,37 @@ func FirstAvailableSlot(Q, x)
 		s <- select(Q.runends, r)
 	return x
 */
-func (q *Rsqf) FirstAvailableSlot(x uint64) uint64 {
-	bi := x / BLOCK_LEN
-	bpos := x % BLOCK_LEN
+func (q *Rsqf) firstAvailableSlot(x uint64) (uint64, error) {
+	bi := x / blockLen
+	bpos := x % blockLen
+
+	if bi >= uint64(len(q.Q)) {
+		return 0, ErrFilterOverflow
+	}
 
 	r := Rank(q.Q[bi].Occupieds, bpos)
 	s := Select(q.Q[bi].Runends, r)
 
 	if r == 0 && s == 0 {
-		return x
+		return x, nil
 	}
 
 	for x <= s {
 		x = s + 1
-		bi = x / BLOCK_LEN
-		bpos = x % BLOCK_LEN
+		bi = x / blockLen
+		bpos = x % blockLen
+		if bi >= uint64(len(q.Q)) {
+			return 0, ErrFilterOverflow
+		}
 		r = Rank(q.Q[bi].Occupieds, bpos)
 		s = Select(q.Q[bi].Runends, r)
 	}
-	return x
+	return x, nil
 }
 
 /*
+Insert places the hash x into the filter where space is available.
+
 func Insert(Q, x)
 	r <- rank(Q.occupieds, b)
 	s <- select(Q.runends, t)
@@ -246,12 +268,12 @@ func Insert(Q, x)
 	Q.occupieds[h0(x)] <- 1
 	return
 */
-func (q *Rsqf) Insert(res uint64) {
-	h0 := (res & q.qMask) >> q.remainder
-	h1 := res & q.rMask
+func (q *Rsqf) Insert(x uint64) {
+	h0 := (x & q.qMask) >> q.remainder
+	h1 := x & q.rMask
 
-	bi := h0 / BLOCK_LEN
-	bpos := h0 % BLOCK_LEN
+	bi := h0 / blockLen
+	bpos := h0 % blockLen
 
 	r := Rank(q.Q[bi].Occupieds, bpos)
 	s := Select(q.Q[bi].Runends, r)
@@ -261,6 +283,14 @@ func (q *Rsqf) Insert(res uint64) {
 
 		q.Put(h0, h1)
 		q.Q[bi].Runends |= re
+	} else {
+		/*
+			s += 1
+			n := q.FirstAvailableSlot(x)
+			for n > s {
+				n := -1
+			}
+		*/
 	}
 
 	var o uint64 = (0x01 << bpos)
@@ -270,20 +300,20 @@ func (q *Rsqf) Insert(res uint64) {
 // Put treats the Remainders block as a block of memory.
 func (q *Rsqf) Put(h0, h1 uint64) {
 	// ~10ns/op... le sigh complexity for now I suppose.
-	bi := h0 / BLOCK_LEN
-	bpos := h0 % BLOCK_LEN
+	bi := h0 / blockLen
+	bpos := h0 % blockLen
 
 	block := &q.Q[bi]
 
 	rpos := bpos * q.remainder
-	ri := rpos / BLOCK_LEN
-	low := (h1 << (rpos % BLOCK_LEN))
+	ri := rpos / blockLen
+	low := (h1 << (rpos % blockLen))
 	block.Remainders[ri] |= low
 
 	// remainder spans multiple blocks
-	if rpos+q.remainder > (ri+1)*BLOCK_LEN {
+	if rpos+q.remainder > (ri+1)*blockLen {
 		ri2 := ri + 1
-		high := h1 >> (BLOCK_LEN - (rpos % BLOCK_LEN))
+		high := h1 >> (blockLen - (rpos % blockLen))
 		block.Remainders[ri2] |= high
 	}
 }
@@ -299,8 +329,8 @@ func oot(v uint64) uint64 {
 // for the associated bit position in a given the remainder.
 func (q *Rsqf) Put2(h0, h1 uint64) {
 	// ~16ns/op sadly 6ns slower than Put()
-	bi := h0 / BLOCK_LEN
-	bpos := h0 % BLOCK_LEN
+	bi := h0 / blockLen
+	bpos := h0 % blockLen
 
 	block := &q.Q[bi]
 

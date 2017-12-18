@@ -5,31 +5,33 @@ import (
 	"unsafe"
 )
 
-func Test_FirstAvailableSlot(t *testing.T) {
+func Test_firstAvailableSlot(t *testing.T) {
 	t.Parallel()
 	td := [][]uint64{
-		// x, occupieds, runends, expected
-		{0x00, 0x00, 0x00, 0x00},
-		{0x00, 0x01, 0x01, 0x01},
-		{0x00, 0x01, 0x08, 0x04},
-		{0x01, 0x01, 0x02, 0x02},
-		{0x00, 0x01, 0x02, 0x02},
-		{0x00, 0x01, 0x04, 0x03},
-		{0x02, 0x02, 0x02, 0x02},
-		{0x02, 0x02, 0x04, 0x03},
-		{0x03, 0x0F, 0x0F, 0x04},
-		{0x80, 0x00, 0x00, 0x80},
+		// x, occupieds, runends, bi, expected
+		{0x00, 0x00, 0x00, 0, 0x00},
+		{0x00, 0x01, 0x01, 0, 0x01},
+		{0x00, 0x01, 0x08, 0, 0x04},
+		{0x01, 0x01, 0x02, 0, 0x02},
+		{0x00, 0x01, 0x02, 0, 0x02},
+		{0x00, 0x01, 0x04, 0, 0x03},
+		{0x02, 0x02, 0x02, 0, 0x02},
+		{0x02, 0x02, 0x04, 0, 0x03},
+		{0x03, 0x0F, 0x0F, 0, 0x04},
+		{0x80, 0x00, 0x00, 0, 0x80},
+		{0x3FFFFFF, 0x00, 0x00, 0x7FF, 0x3FFFE},
 	}
 
 	for i, v := range td {
 		f := New(100000)
 
-		f.Q[0].Occupieds = v[1]
-		f.Q[0].Runends = v[2]
+		bi := v[3]
+		f.Q[bi].Occupieds = v[1]
+		f.Q[bi].Runends = v[2]
 
-		x := v[0]
-		actual := f.FirstAvailableSlot(x)
-		expected := v[3]
+		x := v[0] & (f.qMask | f.rMask)
+		actual, _ := f.firstAvailableSlot(x)
+		expected := v[4]
 		if expected != actual {
 			t.Errorf("[%v] want FAS(0x%X) = %v, got %v",
 				i, x, expected, actual)
@@ -136,10 +138,22 @@ func Test_struct_is_contiguous(t *testing.T) {
 	}
 }
 
-func test_sample_p_values(t *testing.T) {
+func Test_sample_p_values(t *testing.T) {
 	t.Parallel()
-	p := calcP(100000, 0.05)
-	if 0.1 != p {
-		t.Errorf("%v", p)
+	td := [][]int64{
+		{100000, 26},
+		{1000000, 29},
+		{10000000, 33},
+		{100000000, 36},
+		{1000000000, 39},
+	}
+
+	for i, v := range td {
+		p := calcP(float64(v[0]), 1.0/512.0)
+
+		if v[1] != int64(p) {
+			t.Errorf("[%v] want calcP(%v, 1/512) = %v, got %v",
+				i, v[0], v[1], p)
+		}
 	}
 }
