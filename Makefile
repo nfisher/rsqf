@@ -5,6 +5,9 @@ SRC := $(wildcard *.go)
 .PHONY: all
 all: lint.out vet.out coverage.out bench.out
 
+.PHONY: bench
+bench: bench.out
+
 bench.out: $(SRC)
 	go test -bench . | tee bench.out
 
