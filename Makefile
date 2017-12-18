@@ -3,7 +3,7 @@ SHELL := /bin/sh
 SRC := $(wildcard *.go)
 
 .PHONY: all
-all: vet.out coverage.out bench.out
+all: lint.out vet.out coverage.out bench.out
 
 bench.out: $(SRC)
 	go test -bench . | tee bench.out
@@ -19,10 +19,14 @@ coverage.out: cover.out
 
 .PHONY: clean
 clean:
+	rm *.out
 	go clean -i ./...
 
 .PHONY: fast
 fast: vet cov
+
+lint.out: $(SRC)
+	golint | tee lint.out
 
 .PHONY: test
 test: coverage.out
