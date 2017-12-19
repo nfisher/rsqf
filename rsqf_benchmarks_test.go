@@ -68,3 +68,15 @@ func Benchmark_Rank(b *testing.B) {
 		b.Errorf("want Rank() = 64, got %v", c)
 	}
 }
+
+func Benchmark_Select(b *testing.B) {
+	var v uint64 = 0xFFFFFFFFFFFFFFFF
+	var c uint64
+	for i := 0; i < b.N; i++ {
+		c = Select(v, 64)
+	}
+
+	if c != 63 {
+		b.Errorf("want Select() = 63, got %v", c)
+	}
+}

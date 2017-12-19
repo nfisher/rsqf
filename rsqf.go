@@ -7,7 +7,7 @@ import (
 )
 
 const errRate float64 = 1.0 / 512.0
-const rSize = 9 // log2(1/ERR_RATE)
+const rSize = 9 // log2(1/errRate)
 const blockLen = 64
 
 // calcP calculates the p exponent for the universe.
@@ -145,6 +145,8 @@ func Rank(B, i uint64) uint64 {
 }
 
 // Select returns the index of the ith 1 in B.
+// If return is 64 it spans into the next bit vector.
+// ~83ns... too damn slow!
 // References:
 //  https://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetParallel
 func Select(B, i uint64) uint64 {

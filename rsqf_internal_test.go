@@ -53,7 +53,7 @@ func Test_Select(t *testing.T) {
 		{0x0, 1, 64},
 		{0x1, 1, 0},
 		{0x3, 2, 1},
-		//xFFFFFFFFFFFFFFFF
+		{0xFFFFFFFFFFFFFFFF, 64, 63},
 		{0x8800000000000000, 2, 63},
 		{0x8000000000000000, 1, 63},
 	}
