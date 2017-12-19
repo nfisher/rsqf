@@ -12,7 +12,7 @@ func Benchmark_init(b *testing.B) {
 	}
 }
 
-func Benchmark_put_on_high_boundary(b *testing.B) {
+func Benchmark_Put_on_high_boundary(b *testing.B) {
 	f := New(100000)
 	r := &f.Q[0].Remainders
 	b.ResetTimer()
@@ -30,7 +30,7 @@ func Benchmark_put_on_high_boundary(b *testing.B) {
 	}
 }
 
-func Benchmark_put2_on_high_cell(b *testing.B) {
+func Benchmark_Put2_on_high_cell(b *testing.B) {
 	f := New(100000)
 	r := &f.Q[0].Remainders
 	b.ResetTimer()
@@ -59,7 +59,12 @@ func Benchmark_Hash(b *testing.B) {
 
 func Benchmark_Rank(b *testing.B) {
 	var v uint64 = 0xFFFFFFFFFFFFFFFF
+	var c uint64
 	for i := 0; i < b.N; i++ {
-		Rank(v, 64)
+		c = Rank(v, 63)
+	}
+
+	if c != 64 {
+		b.Errorf("want Rank() = 64, got %v", c)
 	}
 }

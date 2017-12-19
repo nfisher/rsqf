@@ -35,56 +35,113 @@ type block struct {
 	Remainders [rSize]uint64
 }
 
-var rankNibbleTable = [16]uint64{
-	//0, 1, 2, 3, 4, 5, 6, 7, 8, 9, A, B, C, D, E, F
-	0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
+/* rankByteTable is a quick look-up table for the number of bits that are 1 in a
+ given byte. Generated using the following program in Go 1.9;
+
+ This almost doubles the performance of Rank() over the previous nibble oriented
+ lookups.
+
+package main
+
+import (
+	"fmt"
+	"math/bits"
+)
+
+func main() {
+	var i uint
+	for ; i < 256; i++ {
+		fmt.Printf("%v, ", bits.OnesCount(i))
+		if i%16 == 0 {
+			fmt.Println("")
+		}
+	}
 }
 
-const one uint64 = 0x1
-const rankMask uint64 = 0x0F
+*/
+var rankByteTable = [256]uint64{
+	0,
+	1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1,
+	2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 1,
+	2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2,
+	3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 1,
+	2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2,
+	3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 2,
+	3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 3,
+	4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 1,
+	2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2,
+	3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 2,
+	3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 3,
+	4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 2,
+	3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 3,
+	4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 3,
+	4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 4,
+	5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8,
+}
 
-// Rank returns the number of 1s in B up to position i.
+var rankMasks = [64]uint64{
+	0x0000000000000001, 0x0000000000000003,
+	0x0000000000000007, 0x000000000000000F,
+	0x000000000000001F, 0x000000000000003F,
+	0x000000000000007F, 0x00000000000000FF,
+	0x00000000000001FF, 0x00000000000003FF,
+	0x00000000000007FF, 0x0000000000000FFF,
+	0x0000000000001FFF, 0x0000000000003FFF,
+	0x0000000000007FFF, 0x000000000000FFFF,
+	0x000000000001FFFF, 0x000000000003FFFF,
+	0x000000000007FFFF, 0x00000000000FFFFF,
+	0x00000000001FFFFF, 0x00000000003FFFFF,
+	0x00000000007FFFFF, 0x0000000000FFFFFF,
+	0x0000000001FFFFFF, 0x0000000003FFFFFF,
+	0x0000000007FFFFFF, 0x000000000FFFFFFF,
+	0x000000001FFFFFFF, 0x000000003FFFFFFF,
+	0x000000007FFFFFFF, 0x00000000FFFFFFFF,
+	0x00000001FFFFFFFF, 0x00000003FFFFFFFF,
+	0x00000007FFFFFFFF, 0x0000000FFFFFFFFF,
+	0x0000001FFFFFFFFF, 0x0000003FFFFFFFFF,
+	0x0000007FFFFFFFFF, 0x000000FFFFFFFFFF,
+	0x000001FFFFFFFFFF, 0x000003FFFFFFFFFF,
+	0x000007FFFFFFFFFF, 0x00000FFFFFFFFFFF,
+	0x00001FFFFFFFFFFF, 0x00003FFFFFFFFFFF,
+	0x00007FFFFFFFFFFF, 0x0000FFFFFFFFFFFF,
+	0x0001FFFFFFFFFFFF, 0x0003FFFFFFFFFFFF,
+	0x0007FFFFFFFFFFFF, 0x000FFFFFFFFFFFFF,
+	0x001FFFFFFFFFFFFF, 0x003FFFFFFFFFFFFF,
+	0x007FFFFFFFFFFFFF, 0x00FFFFFFFFFFFFFF,
+	0x01FFFFFFFFFFFFFF, 0x03FFFFFFFFFFFFFF,
+	0x07FFFFFFFFFFFFFF, 0x0FFFFFFFFFFFFFFF,
+	0x1FFFFFFFFFFFFFFF, 0x3FFFFFFFFFFFFFFF,
+	0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF,
+}
+
+const rankMask uint64 = 0xFF
+
+// Rank returns the number of 1s in B up to position i. Where position i can be
+// between 0 to 63.
 func Rank(B, i uint64) uint64 {
-	masked := B & ((one << (i + 1)) - 1)
+	// mask elimnates need for conditions which would invalidate the pipeline.
+	// Rank is currently 6ns. Might try 2^20 or 2^24 table but it's big!
+	masked := B & rankMasks[i]
 
-	// TODO: Look into using SIMD for this junk or create a 1-byte table
-	c0 := rankNibbleTable[masked&rankMask]
-	masked = masked >> 4
-	c1 := rankNibbleTable[masked&rankMask]
-	masked = masked >> 4
-	c2 := rankNibbleTable[masked&rankMask]
-	masked = masked >> 4
-	c3 := rankNibbleTable[masked&rankMask]
+	// TODO: Look into using SIMD for this junk.
+	c0 := rankByteTable[masked&rankMask]
+	masked = masked >> 8
+	c1 := rankByteTable[masked&rankMask]
+	masked = masked >> 8
+	c2 := rankByteTable[masked&rankMask]
+	masked = masked >> 8
+	c3 := rankByteTable[masked&rankMask]
 
-	masked = masked >> 4
-	c4 := rankNibbleTable[masked&rankMask]
-	masked = masked >> 4
-	c5 := rankNibbleTable[masked&rankMask]
-	masked = masked >> 4
-	c6 := rankNibbleTable[masked&rankMask]
-	masked = masked >> 4
-	c7 := rankNibbleTable[masked&rankMask]
+	masked = masked >> 8
+	c4 := rankByteTable[masked&rankMask]
+	masked = masked >> 8
+	c5 := rankByteTable[masked&rankMask]
+	masked = masked >> 8
+	c6 := rankByteTable[masked&rankMask]
+	masked = masked >> 8
+	c7 := rankByteTable[masked&rankMask]
 
-	masked = masked >> 4
-	c8 := rankNibbleTable[masked&rankMask]
-	masked = masked >> 4
-	c9 := rankNibbleTable[masked&rankMask]
-	masked = masked >> 4
-	c10 := rankNibbleTable[masked&rankMask]
-	masked = masked >> 4
-	c11 := rankNibbleTable[masked&rankMask]
-
-	masked = masked >> 4
-	c12 := rankNibbleTable[masked&rankMask]
-	masked = masked >> 4
-	c13 := rankNibbleTable[masked&rankMask]
-	masked = masked >> 4
-	c14 := rankNibbleTable[masked&rankMask]
-	masked = masked >> 4
-	c15 := rankNibbleTable[masked&rankMask]
-
-	return c0 + c1 + c2 + c3 + c4 + c5 + c6 + c7 +
-		c8 + c9 + c10 + c11 + c12 + c13 + c14 + c15
+	return c0 + c1 + c2 + c3 + c4 + c5 + c6 + c7
 }
 
 // Select returns the index of the ith 1 in B.
@@ -217,9 +274,9 @@ func firstAvailableSlot(Q, x)
 		s <- select(Q.runends, r)
 	return x
 */
-func (q *Rsqf) firstAvailableSlot(x uint64) (uint64, error) {
-	bi := x / blockLen
-	bpos := x % blockLen
+func (q *Rsqf) firstAvailableSlot(h0 uint64) (uint64, error) {
+	bi := h0 / blockLen
+	bpos := h0 % blockLen
 
 	if bi >= uint64(len(q.Q)) {
 		return 0, ErrFilterOverflow
@@ -229,20 +286,20 @@ func (q *Rsqf) firstAvailableSlot(x uint64) (uint64, error) {
 	s := Select(q.Q[bi].Runends, r)
 
 	if r == 0 && s == 0 {
-		return x, nil
+		return h0, nil
 	}
 
-	for x <= s {
-		x = s + 1
-		bi = x / blockLen
-		bpos = x % blockLen
+	for h0 <= s {
+		h0 = s + 1
+		bi = h0 / blockLen
+		bpos = h0 % blockLen
 		if bi >= uint64(len(q.Q)) {
 			return 0, ErrFilterOverflow
 		}
 		r = Rank(q.Q[bi].Occupieds, bpos)
 		s = Select(q.Q[bi].Runends, r)
 	}
-	return x, nil
+	return h0, nil
 }
 
 /*
@@ -251,21 +308,21 @@ Insert places the hash x into the filter where space is available.
 func Insert(Q, x)
 	r <- rank(Q.occupieds, b)
 	s <- select(Q.runends, t)
-	if h0(x) > s then
+	if h0(x) > s then // home slot advantage
 		Q.remainders[h0(x)] <- h1(x)
 		Q.runends[h0(x)] <- 1
-	else
-		s <- s + 1
-		n <- FirstAvailableSlot(Q, x)
-		while n > s do
-			Q.remainders[n] <- Q.remainders[n - 1]
-			Q.runends[n] <- Q.runends[n - 1]
-			n <- n - 1
-		Q.remainders[s] <- h1(x)
+	else // oh noes someones in our home slot
+		s <- s + 1 // next slot
+		n <- FirstAvailableSlot(Q, x) // end of this run
+		while n > s do // can prob do this as a block shift op on remainders/runends
+			Q.remainders[n] <- Q.remainders[n - 1] // shift remainder right.
+			Q.runends[n] <- Q.runends[n - 1] // shift runend value right
+			n <- n - 1 // decrement to previous slot
+		Q.remainders[s] <- h1(x) // insert slot
 		if Q.occupieds[h0(x)] == 1 then
-			Q.runends[s - 1] <- 0
-		Q.runends[s] <- 1
-	Q.occupieds[h0(x)] <- 1
+			Q.runends[s - 1] <- 0 // zero previous runend
+		Q.runends[s] <- 1 // set current runend
+	Q.occupieds[h0(x)] <- 1 // force set occupieds for h0(x)
 	return
 */
 func (q *Rsqf) Insert(x uint64) {
@@ -276,6 +333,7 @@ func (q *Rsqf) Insert(x uint64) {
 	bpos := h0 % blockLen
 
 	r := Rank(q.Q[bi].Occupieds, bpos)
+	// TODO: Handle return value of 64. Should make Select and Rank receiver meth.
 	s := Select(q.Q[bi].Runends, r)
 
 	if h0 > s || (r == 0 && s == 0) {
@@ -286,9 +344,10 @@ func (q *Rsqf) Insert(x uint64) {
 	} else {
 		/*
 			s += 1
-			n := q.FirstAvailableSlot(x)
+			n, := q.firstAvailableSlot(x)
 			for n > s {
 				n := -1
+				// slide runend to current pos
 			}
 		*/
 	}
