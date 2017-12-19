@@ -5,6 +5,15 @@ import (
 	"unsafe"
 )
 
+func Test_firstAvailableSlot_should_return_error_when_larger_than_Q(t *testing.T) {
+	t.Parallel()
+	f := New(100000)
+	_, err := f.firstAvailableSlot(0x20000)
+	if err != ErrFilterOverflow {
+		t.Errorf("want f.firstAvailableSlot(0x20000) error = ErrFilterOverflow, got %v", err)
+	}
+}
+
 func Test_firstAvailableSlot(t *testing.T) {
 	t.Parallel()
 	td := [][]uint64{
@@ -19,7 +28,8 @@ func Test_firstAvailableSlot(t *testing.T) {
 		{0x02, 0x02, 0x04, 0, 0x03},
 		{0x03, 0x0F, 0x0F, 0, 0x04},
 		{0x80, 0x00, 0x00, 0, 0x80},
-		{0x7FF, 0x00, 0x00, 0x7FF, 0x7FF},
+		{0x3E, 0x2000000000000000, 0x4000000000000000, 0, 0x3F},
+		{0x1FFFF, 0x00, 0x00, 0x7FF, 0x1FFFF},
 	}
 
 	for i, v := range td {
@@ -29,8 +39,8 @@ func Test_firstAvailableSlot(t *testing.T) {
 		f.Q[bi].Occupieds = v[1]
 		f.Q[bi].Runends = v[2]
 
-		x := v[0]
-		actual, err := f.firstAvailableSlot(x)
+		h0 := v[0]
+		actual, err := f.firstAvailableSlot(h0)
 
 		if err != nil {
 			t.Errorf("[%v] want err = nil, got %v. len(Q) = 0x%X", i, err, len(f.Q))
@@ -40,7 +50,7 @@ func Test_firstAvailableSlot(t *testing.T) {
 		expected := v[4]
 		if expected != actual {
 			t.Errorf("[%v] want firstAvailableSlot(0x%X) = 0x%X, got 0x%X",
-				i, x, expected, actual)
+				i, h0, expected, actual)
 		}
 	}
 }
