@@ -35,7 +35,7 @@ r is therefore fixed at 9 (`r = log2(1/0.001953)`). q will vary relative to p
 A filter that accepts 1 million entries will require ~11.67 bits per entry and
 require approximately 1.46MB (Si) of memory.
 
-## Status
+## Status
 
   - [ ] Rank
   - [ ] Select
