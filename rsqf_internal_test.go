@@ -6,10 +6,9 @@ import (
 )
 
 func Test_firstAvailableSlot(t *testing.T) {
-	t.Skip()
 	t.Parallel()
 	td := [][]uint64{
-		// x, occupieds, runends, bi, expected
+		// h0, occupieds, runends, bi, expected
 		{0x00, 0x00, 0x00, 0, 0x00},
 		{0x00, 0x01, 0x01, 0, 0x01},
 		{0x00, 0x01, 0x08, 0, 0x04},
@@ -20,7 +19,7 @@ func Test_firstAvailableSlot(t *testing.T) {
 		{0x02, 0x02, 0x04, 0, 0x03},
 		{0x03, 0x0F, 0x0F, 0, 0x04},
 		{0x80, 0x00, 0x00, 0, 0x80},
-		{0x3FFFFFF, 0x00, 0x00, 0x7FF, 0x3FFFE},
+		{0x7FF, 0x00, 0x00, 0x7FF, 0x7FF},
 	}
 
 	for i, v := range td {
@@ -30,7 +29,7 @@ func Test_firstAvailableSlot(t *testing.T) {
 		f.Q[bi].Occupieds = v[1]
 		f.Q[bi].Runends = v[2]
 
-		x := v[0] & (f.qMask | f.rMask)
+		x := v[0]
 		actual, err := f.firstAvailableSlot(x)
 
 		if err != nil {

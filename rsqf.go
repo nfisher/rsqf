@@ -265,7 +265,7 @@ func (q *Rsqf) MayContain(x []byte) {
 var ErrFilterOverflow = errors.New("RSQF overflow")
 
 /*
-firstAvailableSlot finds the first available slot for the hash x in this filter.
+firstAvailableSlot finds the first available slot in or after h0 in the filter.
 
 func firstAvailableSlot(Q, x)
 	r <- rank(Q.occupieds, x)
