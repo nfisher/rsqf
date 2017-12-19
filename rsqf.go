@@ -327,7 +327,7 @@ func Insert(Q, x)
 	Q.occupieds[h0(x)] <- 1 // force set occupieds for h0(x)
 	return
 */
-func (q *Rsqf) Insert(x uint64) {
+func (q *Rsqf) Insert(x uint64) error {
 	h0 := (x & q.qMask) >> q.remainder
 	h1 := x & q.rMask
 
@@ -344,18 +344,26 @@ func (q *Rsqf) Insert(x uint64) {
 		q.Put(h0, h1)
 		q.Q[bi].Runends |= re
 	} else {
+		s += 1
+		n, err := q.firstAvailableSlot(h0)
+		if err != nil {
+			return err
+		}
+		q.Q[bi].Runends = q.Q[bi].Runends << s
 		/*
-			s += 1
-			n, := q.firstAvailableSlot(x)
 			for n > s {
 				n := -1
 				// slide runend to current pos
 			}
 		*/
+
+		q.Put(n, h1)
 	}
 
 	var o uint64 = (0x01 << bpos)
 	q.Q[bi].Occupieds |= o
+
+	return nil
 }
 
 // Put treats the Remainders block as a block of memory.
