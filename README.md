@@ -1,4 +1,6 @@
-# Rank and Seek Quotient Filter [![Godoc](https://godoc.org/github.com/nfisher/rsqf?status.svg)](https://godoc.org/github.com/nfisher/rsqf) [![Build Status](https://travis-ci.org/nfisher/rsqf.svg?branch=master)](https://travis-ci.org/nfisher/rsqf) [![Go Report Card](https://goreportcard.com/badge/github.com/nfisher/rsqf)](https://goreportcard.com/report/github.com/nfisher/rsqf)
+# Rank and Seek Quotient Filter
+
+[![Godoc](https://godoc.org/github.com/nfisher/rsqf?status.svg)](https://godoc.org/github.com/nfisher/rsqf) [![Build Status](https://travis-ci.org/nfisher/rsqf.svg?branch=master)](https://travis-ci.org/nfisher/rsqf) [![Go Report Card](https://goreportcard.com/badge/github.com/nfisher/rsqf)](https://goreportcard.com/report/github.com/nfisher/rsqf) [![codecov](https://codecov.io/gh/nfisher/rsqf/branch/master/graph/badge.svg)](https://codecov.io/gh/nfisher/rsqf)
 
 [A general purpose counting filter: making every bit count](https://www3.cs.stonybrook.edu/~ppandey/files/p775-pandey.pdf) by Pandey et al., SIGMOD’17
 
@@ -35,8 +37,8 @@ require approximately 1.46MB (Si) of memory.
 
 ## Status
 
-  - [-] Rank
-  - [-] Select
+  - [ ] Rank
+  - [ ] Select
   - [x] Hash (fnv, might consider Murmur3, CityHash, or xxHash)
   - [ ] FirstAvailableSlot
   - [ ] Insert
