@@ -5,7 +5,7 @@ go:
   - 1.9
   - master
 before_install:
-  - go get github.com/mattn/goveralls
+  - go get -u github.com/golang/lint/golint
 script:
   - make
 after_success:
